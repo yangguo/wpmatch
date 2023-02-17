@@ -14,7 +14,7 @@ from upload import (
     savedf,
 )
 from utils import (
-    df2aggrid,
+    # df2aggrid,
     get_folder_list,
 )
 
@@ -138,8 +138,8 @@ def main():
                     else:
                         st.error("不支持文件类型")
 
-        # display all policy
-        st.write("已编码的文件：")
+        # display all upload files
+        st.write("已上传的文件：")
         uploadfilels = get_uploadfiles()
         # st.write(uploadfilels)
         # display all upload files

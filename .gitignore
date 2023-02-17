@@ -131,3 +131,5 @@ dmypy.json
 uploads
 fileraw
 fileidx
+
+.gitpod.*

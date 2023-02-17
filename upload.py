@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import streamlit as st
 import numpy as np
-import scipy
+# import scipy
 
 from utils import get_csvdf
 
@@ -14,7 +14,7 @@ uploadfolder = 'uploads'
 
 
 def get_uploadfiles():
-    fileslist = glob.glob(uploadfolder + '/*.npy', recursive=True)
+    fileslist = glob.glob(uploadfolder + '/*.*', recursive=True)
     filenamels = []
     for filepath in fileslist:
         filename = os.path.basename(filepath)
