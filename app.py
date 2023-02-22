@@ -16,9 +16,10 @@ from upload import (
 from utils import (
     # df2aggrid,
     get_folder_list,
+    get_wpdf
 )
 
-auditfolder="audits"
+uploadfolder = "uploads"
 
 def main():
 
@@ -208,6 +209,14 @@ def main():
             st.session_state["file_list"] = file_list
             st.session_state["wp_choice"] = wp_choice
 
+        # enbedding button
+        embedding = st.sidebar.button("生成问答模型")
+        if embedding:
+            with st.spinner("正在生成问答模型..."):
+                # generate embeddings
+                build_index()
+                st.success("问答模型生成完成")
+
         st.subheader("已选择的文件：")
         # display file1 rulechoice
         if file_list != []:
@@ -228,24 +237,51 @@ def main():
 
     elif choice == "文件问答":
         st.subheader("文件问答")
-        # enbedding button
-        embedding = st.sidebar.button("生成问答模型")
-        if embedding:
-            with st.spinner("正在生成问答模型..."):
-                # generate embeddings
-                build_index()
-                st.success("问答模型生成完成")
+        
+        mode=st.sidebar.radio('选择模式',['单条','批量'])
 
-        # question input
-        question = st.text_input("输入问题")
-        if question != "":
-            # answer button
-            answer_btn = st.button("获取答案")
-            if answer_btn:
-                with st.spinner("正在获取答案..."):
-                    # get answer
-                    answer = gpt_answer(question)
-                    st.write(answer)
+        if mode=='单条':
+            # question input
+            question = st.text_input("输入问题")
+            if question != "":
+                # answer button
+                answer_btn = st.button("获取答案")
+                if answer_btn:
+                    with st.spinner("正在获取答案..."):
+                        # get answer
+                        answer = gpt_answer(question)
+                        st.write(answer)
+        elif mode=='批量':
+            wp_choice = st.session_state["wp_choice"]
+
+            # st.subheader("已选择的底稿：")
+            # display file2 rulechoice
+            if wp_choice != "":
+                # display string
+                st.sidebar.warning("底稿" + wp_choice)
+                wpdf=get_wpdf(wp_choice, uploadfolder)
+                wplen=len(wpdf)
+                # choose page start number and end number
+                start_num = st.sidebar.number_input("起始页", value=0, min_value=0)
+                # convert to int
+                start_num = int(start_num)
+                end_num = st.sidebar.number_input("结束页", value=wplen-1)
+                # convert to int
+                end_num = int(end_num)
+                subwpdf=wpdf[start_num:end_num+1]
+                questionls=subwpdf['条款'].tolist()
+                st.write(questionls)
+                # answer button
+                answer_btn = st.button("获取答案")
+                if answer_btn:
+                    with st.spinner("正在获取答案..."):
+                        for idx,question in enumerate(questionls):
+                            st.write('问题'+str(idx)+'： '+question)
+                            # get answer
+                            answer = gpt_answer(question)
+                            st.write(answer)
+            else:
+                st.sidebar.error("底稿：无")
 
 
 if __name__ == "__main__":

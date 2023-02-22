@@ -35,6 +35,12 @@ def rule2df(filename, filepath):
     return docdf
 
 
+def get_wpdf(filename, filepath):
+    df = get_csvdf(filepath)
+    wpdf=df[df["制度"] == filename]
+    return wpdf
+
+
 # split string by space into words, add brackets before and after words, combine into text
 def split_words(text):
     words = text.split()
