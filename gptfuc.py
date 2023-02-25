@@ -1,13 +1,14 @@
 import os
 
-import requests
-from gpt_index import GPTSimpleVectorIndex, SimpleDirectoryReader
-from gpt_index import GPTSimpleVectorIndex, LLMPredictor
+# import requests
+from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
 from langchain import OpenAI
 
 # os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY")
 
 uploadfolder = "uploads"
+filerawfolder = "fileraw"
+fileidxfolder = "fileidx"
 backendurl = "http://localhost:8000"
 
 # openai_api_key=os.environ.get("OPENAI_API_KEY")
@@ -17,19 +18,21 @@ llm_predictor = LLMPredictor(
     llm=OpenAI(temperature=0, model_name="text-davinci-003", max_tokens=1024)
 )
 
+
 def build_index():
-    documents = SimpleDirectoryReader(uploadfolder, recursive=True).load_data()
+    documents = SimpleDirectoryReader(filerawfolder, recursive=True).load_data()
     index = GPTSimpleVectorIndex(documents)
-    index.save_to_disk(os.path.join(uploadfolder, "filedata.json"))
+    index.save_to_disk(os.path.join(fileidxfolder, "filedata.json"))
 
 
 def gpt_answer(question):
-    filepath = os.path.join(uploadfolder, "filedata.json")
+    filepath = os.path.join(fileidxfolder, "filedata.json")
     index = GPTSimpleVectorIndex.load_from_disk(filepath, llm_predictor=llm_predictor)
 
     prompt = f'You are a helpful support agent. You are asked: "{question}". Try to use only the information provided. Format your answer nicely as a Markdown page.'
     response = index.query(prompt).response.strip()
     return response
+
 
 # def gpt_answer(question):
 #     try:
@@ -45,6 +48,3 @@ def gpt_answer(question):
 #         print("错误: " + str(e))
 #         result = "错误: " + str(e)
 #     return result
-
-
-
