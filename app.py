@@ -204,10 +204,14 @@ def main():
         # enbedding button
         embedding = st.sidebar.button("生成问答模型")
         if embedding:
-            with st.spinner("正在生成问答模型..."):
-                # generate embeddings
+            # with st.spinner("正在生成问答模型..."):
+            # generate embeddings
+            try:
                 build_index()
                 st.success("问答模型生成完成")
+            except Exception as e:
+                st.error(e)
+                st.error("问答模型生成失败，请检查文件格式")
 
         st.subheader("已选择的文件：")
         # display file1 rulechoice
@@ -256,6 +260,8 @@ def main():
         elif mode == "批量":
             wp_choice = st.session_state["wp_choice"]
 
+            # input prompt text
+            prompt_text = st.sidebar.text_area("输入提示文本")
             # st.subheader("已选择的底稿：")
             # display file2 rulechoice
             if wp_choice != "":
@@ -279,12 +285,13 @@ def main():
                 if answer_btn:
                     with st.spinner("正在获取答案..."):
                         for idx, question in enumerate(questionls):
-                            st.write("问题" + str(idx) + "： " + question)
+                            full_question = prompt_text + question
+                            st.write("问题" + str(idx) + "： " + full_question)
                             # get answer
-                            answer = gpt_answer(question)
+                            answer = gpt_answer(full_question)
                             st.write(answer)
             else:
-                st.sidebar.error("底稿：无")
+                st.sidebar.error("请选择底稿")
 
 
 if __name__ == "__main__":

@@ -1,19 +1,33 @@
+# from langchain.llms import OpenAI
+import json
 import os
 
-# import requests
-from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
+# from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
 from langchain import OpenAI
 
-# os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY")
+# import requests
+from llama_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
+
+# read config from config.json
+with open("config.json", "r") as f:
+    config = json.load(f)
+
+# get openai api key from config.json
+api_key = config["openai_api_key"]
+
+os.environ["OPENAI_API_KEY"] = api_key
 
 uploadfolder = "uploads"
 filerawfolder = "fileraw"
 fileidxfolder = "fileidx"
 backendurl = "http://localhost:8000"
 
-# openai_api_key=os.environ.get("OPENAI_API_KEY")
-# if openai_api_key is None:
-#     print("请设置OPENAI_API_KEY")
+openai_api_key = os.environ.get("OPENAI_API_KEY")
+if openai_api_key is None:
+    print("请设置OPENAI_API_KEY")
+else:
+    print("已设置OPENAI_API_KEY" + openai_api_key)
+
 llm_predictor = LLMPredictor(
     llm=OpenAI(temperature=0, model_name="text-davinci-003", max_tokens=1024)
 )
@@ -29,7 +43,8 @@ def gpt_answer(question):
     filepath = os.path.join(fileidxfolder, "filedata.json")
     index = GPTSimpleVectorIndex.load_from_disk(filepath, llm_predictor=llm_predictor)
 
-    prompt = f'You are a helpful support agent. You are asked: "{question}". Try to use only the information provided. Format your answer nicely as a Markdown page.'
+    # prompt = f'You are a helpful support agent. You are asked: "{question}". Try to use only the information provided. Format your answer nicely as a Markdown page.'
+    prompt = f'您是一位专业顾问。您被问到："{question}"。请尽可能使用提供的信息。请将您的答案格式化为漂亮的Markdown页面。'
     response = index.query(prompt).response.strip()
     return response
 
