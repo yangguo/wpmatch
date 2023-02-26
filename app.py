@@ -261,7 +261,8 @@ def main():
             if wp_choice != "":
                 # display string
                 st.sidebar.warning("底稿" + wp_choice)
-                wpdf = get_wpdf(wp_choice, uploadfolder)
+                wpname = wp_choice.split(".")[0]
+                wpdf = get_wpdf(wpname, uploadfolder)
                 wplen = len(wpdf)
                 # choose page start number and end number
                 start_num = st.sidebar.number_input("起始页", value=0, min_value=0)
