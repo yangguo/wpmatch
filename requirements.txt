@@ -28,7 +28,7 @@ joblib==1.2.0
 jsonschema==4.17.3
 langchain==0.0.88
 lxml==4.9.2
-markdown-it-py==2.1.0
+markdown-it-py==2.2.0
 MarkupSafe==2.1.2
 marshmallow==3.19.0
 marshmallow-enum==1.5.1
