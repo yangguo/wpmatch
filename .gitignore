@@ -136,3 +136,6 @@ fileidx
 .trunk
 
 config.json
+
+*.index
+*.pkl
