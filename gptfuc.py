@@ -1,25 +1,29 @@
 # from langchain.llms import OpenAI
 import json
 import os
+import pickle
+from pathlib import Path
 
-from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
+import faiss
+
+# from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
+from langchain.chains import VectorDBQA
+
+# from langchain.chains.question_answering import load_qa_chain
+# from langchain.document_loaders import TextLoader
+from langchain.embeddings import OpenAIEmbeddings
+
+# from langchain.indexes import VectorstoreIndexCreator
+from langchain.llms import OpenAIChat
+
+# from langchain.text_splitter import CharacterTextSplitter
+from langchain.vectorstores import FAISS
+
 # from langchain import OpenAI
 
 # import requests
 # from llama_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
 
-from langchain.document_loaders import TextLoader
-from langchain.indexes import VectorstoreIndexCreator
-from langchain.chains.question_answering import load_qa_chain
-from langchain.llms import OpenAI
-from pathlib import Path
-from langchain.text_splitter import CharacterTextSplitter
-import faiss
-from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.chains import VectorDBQAWithSourcesChain,VectorDBQA
-from langchain.llms import OpenAIChat
-import pickle
 
 # read config from config.json
 with open("config.json", "r") as f:
@@ -50,8 +54,9 @@ else:
 # )
 
 # use ChatGPT [beta]
-from gpt_index.langchain_helpers.chatgpt import ChatGPTLLMPredictor
-llm_predictor = ChatGPTLLMPredictor()
+# from gpt_index.langchain_helpers.chatgpt import ChatGPTLLMPredictor
+
+# llm_predictor = ChatGPTLLMPredictor()
 
 
 # def build_index():
@@ -71,15 +76,16 @@ llm_predictor = ChatGPTLLMPredictor()
 #     response=index.query(prompt,llm_predictor=llm_predictor)
 #     return response
 
+
 def build_index():
     """
     Ingests data into LangChain by creating an FAISS index of OpenAI embeddings for text files in a folder "fileraw".
     The created index is saved to a file in the folder "fileidx".
     """
-    
+
     # Get paths to text files in the "fileraw" folder
     ps = list(Path(filerawfolder).glob("**/*.txt"))
-    
+
     data = []
     sources = []
     for p in ps:
@@ -100,14 +106,15 @@ def build_index():
     store.index = None
     with open(f"{fileidxfolder}/faiss_store.pkl", "wb") as f:
         pickle.dump(store, f)
-        
+
+
 def split_text(text, chunk_chars=4000, overlap=50):
     """
     Pre-process text file into chunks
     """
     splits = []
     for i in range(0, len(text), chunk_chars - overlap):
-        splits.append(text[i:i + chunk_chars])
+        splits.append(text[i : i + chunk_chars])
     return splits
 
 
@@ -120,7 +127,12 @@ def gpt_answer(question):
 
     store.index = index
 
-    prefix_messages = [{"role": "system", "content": "You are a helpful assistant that is very good at problem solving who thinks step by step."}]
+    prefix_messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that is very good at problem solving who thinks step by step.",
+        }
+    ]
     llm = OpenAIChat(temperature=0, prefix_messages=prefix_messages)
 
     chain = VectorDBQA.from_chain_type(llm, chain_type="stuff", vectorstore=store)

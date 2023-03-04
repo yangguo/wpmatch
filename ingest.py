@@ -1,12 +1,14 @@
 """This is the logic for ingesting Notion data into LangChain."""
-from pathlib import Path
-from langchain.text_splitter import CharacterTextSplitter
-import faiss
-from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
-import pickle
-import os
 import json
+import os
+import pickle
+from pathlib import Path
+
+import faiss
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.vectorstores import FAISS
+
 # read config from config.json
 with open("config.json", "r") as f:
     config = json.load(f)
@@ -23,7 +25,7 @@ def split_text(text, chunk_chars=4000, overlap=50):
     """
     splits = []
     for i in range(0, len(text), chunk_chars - overlap):
-        splits.append(text[i:i + chunk_chars])
+        splits.append(text[i : i + chunk_chars])
     return splits
 
 
@@ -48,7 +50,7 @@ for i, d in enumerate(data):
 
 
 # Here we create a vector store from the documents and save it to disk.
-store = FAISS.from_texts(docs, OpenAIEmbeddings())#, metadatas=metadatas)
+store = FAISS.from_texts(docs, OpenAIEmbeddings())  # , metadatas=metadatas)
 faiss.write_index(store.index, "docs.index")
 store.index = None
 with open("faiss_store.pkl", "wb") as f:
