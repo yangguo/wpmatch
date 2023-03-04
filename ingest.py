@@ -42,13 +42,13 @@ for p in ps:
 docs = []
 metadatas = []
 for i, d in enumerate(data):
-    splits = split_text(d, chunk_chars=1000, overlap=50)
+    splits = split_text(d, chunk_chars=800, overlap=50)
     docs.extend(splits)
-    metadatas.extend([{"source": sources[i]}] * len(splits))
+    # metadatas.extend([{"source": sources[i]}] * len(splits))
 
 
 # Here we create a vector store from the documents and save it to disk.
-store = FAISS.from_texts(docs, OpenAIEmbeddings(), metadatas=metadatas)
+store = FAISS.from_texts(docs, OpenAIEmbeddings())#, metadatas=metadatas)
 faiss.write_index(store.index, "docs.index")
 store.index = None
 with open("faiss_store.pkl", "wb") as f:
