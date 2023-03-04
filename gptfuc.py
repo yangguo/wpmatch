@@ -34,7 +34,7 @@ else:
     print("已设置OPENAI_API_KEY" + openai_api_key)
 
 # gpt_model="text-davinci-003"
-gpt_model='gpt-3.5-turbo'
+# gpt_model='gpt-3.5-turbo'
 
 
 # llm_predictor = LLMPredictor(
@@ -43,7 +43,6 @@ gpt_model='gpt-3.5-turbo'
 
 # use ChatGPT [beta]
 from gpt_index.langchain_helpers.chatgpt import ChatGPTLLMPredictor
-
 llm_predictor = ChatGPTLLMPredictor()
 
 
@@ -59,22 +58,8 @@ def gpt_answer(question):
     index = GPTSimpleVectorIndex.load_from_disk(filepath, llm_predictor=llm_predictor)
 
     # prompt = f'You are a helpful support agent. You are asked: "{question}". Try to use only the information provided. Format your answer nicely as a Markdown page.'
-    prompt = f'您是一位专业顾问。您被问到："{question}"。请尽可能使用提供的信息。请将您的答案格式化为漂亮的Markdown页面。'
-    response = index.query(prompt,llm_predictor=llm_predictor)
+    prompt = f'您是一位专业顾问。您被问到："{question}"。请尽可能使用提供的信息。'
+    # response = index.query(prompt).response.strip()
+    response=index.query(prompt,llm_predictor=llm_predictor)
     return response
 
-
-# def gpt_answer(question):
-#     try:
-#         url = backendurl + "/answer"
-#         payload = {
-#             "question": question,
-#         }
-#         headers = {}
-#         res = requests.post(url, headers=headers, params=payload)
-#         result = res.json()
-#         print("成功")
-#     except Exception as e:
-#         print("错误: " + str(e))
-#         result = "错误: " + str(e)
-#     return result

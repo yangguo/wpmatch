@@ -17,6 +17,16 @@ api_key = config["openai_api_key"]
 os.environ["OPENAI_API_KEY"] = api_key
 
 
+def split_text(text, chunk_chars=4000, overlap=50):
+    """
+    Pre-process text file into chunks
+    """
+    splits = []
+    for i in range(0, len(text), chunk_chars - overlap):
+        splits.append(text[i:i + chunk_chars])
+    return splits
+
+
 # Here we load in the data in the format that Notion exports it in.
 ps = list(Path("uploads/").glob("**/*.txt"))
 
@@ -29,11 +39,10 @@ for p in ps:
 
 # Here we split the documents, as needed, into smaller chunks.
 # We do this due to the context limits of the LLMs.
-text_splitter = CharacterTextSplitter(chunk_size=1500, separator="\n")
 docs = []
 metadatas = []
 for i, d in enumerate(data):
-    splits = text_splitter.split_text(d)
+    splits = split_text(d, chunk_chars=1000, overlap=50)
     docs.extend(splits)
     metadatas.extend([{"source": sources[i]}] * len(splits))
 
