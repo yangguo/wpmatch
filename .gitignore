@@ -139,3 +139,5 @@ config.json
 
 *.index
 *.pkl
+
+.DS_Store

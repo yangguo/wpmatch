@@ -122,6 +122,9 @@ def save_uploadedfile(uploadedfile):
 
 def copy_files(file_list, source_folder, target_folder):
     for file_name in file_list:
+        print(file_name)
         source_file = os.path.join(source_folder, file_name)
         target_file = os.path.join(target_folder, file_name)
+        print(source_file)
+        print(target_file)
         shutil.copy2(source_file, target_file)

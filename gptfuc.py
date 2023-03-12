@@ -5,21 +5,24 @@ import pickle
 from pathlib import Path
 
 import faiss
+import pinecone
 
 # from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
 from langchain.chains import VectorDBQA
+from langchain.chains.question_answering import load_qa_chain
 
-# from langchain.chains.question_answering import load_qa_chain
 # from langchain.document_loaders import TextLoader
+from langchain.document_loaders import DirectoryLoader
 from langchain.embeddings import OpenAIEmbeddings
 
 # from langchain.indexes import VectorstoreIndexCreator
 from langchain.llms import OpenAIChat
-
-# from langchain.text_splitter import CharacterTextSplitter
-from langchain.vectorstores import FAISS
-
-# from langchain import OpenAI
+from langchain.text_splitter import (
+    CharacterTextSplitter,
+    RecursiveCharacterTextSplitter,
+)
+from langchain.vectorstores import FAISS, Chroma, Pinecone, Qdrant
+from qdrant_client import QdrantClient
 
 # import requests
 # from llama_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
@@ -31,6 +34,13 @@ with open("config.json", "r") as f:
 
 # get openai api key from config.json
 api_key = config["openai_api_key"]
+
+# PINECONE_API_KEY = ''
+# PINECONE_API_ENV = 'us-west1-gcp'
+
+qdrant_host = "127.0.0.1"
+# qdrant_api_key = ""
+
 
 os.environ["OPENAI_API_KEY"] = api_key
 
@@ -44,6 +54,12 @@ if openai_api_key is None:
     print("请设置OPENAI_API_KEY")
 else:
     print("已设置OPENAI_API_KEY" + openai_api_key)
+
+# initialize pinecone
+# pinecone.init(
+#     api_key=PINECONE_API_KEY,
+#     environment=PINECONE_API_ENV
+# )
 
 # gpt_model="text-davinci-003"
 # gpt_model='gpt-3.5-turbo'
@@ -84,59 +100,135 @@ def build_index():
     """
 
     # Get paths to text files in the "fileraw" folder
-    ps = list(Path(filerawfolder).glob("**/*.txt"))
+    # ps = list(Path(filerawfolder).glob("**/*.txt"))
 
-    data = []
-    sources = []
-    for p in ps:
-        with open(p) as f:
-            data.append(f.read())
-        sources.append(p)
+    # data = []
+    # sources = []
+    # for p in ps:
+    #     with open(p) as f:
+    #         data.append(f.read())
+    #     sources.append(p)
 
-    # Split the documents into smaller chunks as needed due to the context limits of the LLMs
-    docs = []
-    for d in data:
-        splits = split_text(d, chunk_chars=800, overlap=50)
-        docs.extend(splits)
+    # # Split the documents into smaller chunks as needed due to the context limits of the LLMs
+    # docs = []
+    # for d in data:
+    #     splits = split_text(d, chunk_chars=800, overlap=50)
+    #     docs.extend(splits)
+
+    loader = DirectoryLoader(filerawfolder, glob="**/*.txt")
+    documents = loader.load()
+    text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    # use tiktoken
+    # text_splitter = CharacterTextSplitter.from_tiktoken_encoder(chunk_size=1000, chunk_overlap=0)
+    docs = text_splitter.split_documents(documents)
+    embeddings = OpenAIEmbeddings()
+    # Create vector store from documents and save to disk
+    # store = FAISS.from_texts(docs, OpenAIEmbeddings())
+    store = FAISS.from_documents(docs, embeddings)
+    store.save_local(fileidxfolder)
+
+    # use qdrant
+    # collection_name = "filedocs"
+    # # Create vector store from documents and save to qdrant
+    # Qdrant.from_documents(docs, embeddings, host=qdrant_host, prefer_grpc=True, collection_name=collection_name)
+
+    # use pinecone
+    # Create vector store from documents and save to pinecone
+    # index_name = "langchain1"
+    # docsearch = Pinecone.from_documents(docs, embeddings, index_name=index_name)
+    # return docsearch
+
+
+# def split_text(text, chunk_chars=4000, overlap=50):
+#     """
+#     Pre-process text file into chunks
+#     """
+#     splits = []
+#     for i in range(0, len(text), chunk_chars - overlap):
+#         splits.append(text[i : i + chunk_chars])
+#     return splits
+
+
+# create function to add new documents to the index
+def add_to_index():
+    """
+    Adds new documents to the LangChain index by creating an FAISS index of OpenAI embeddings for text files in a folder "fileraw".
+    The created index is saved to a file in the folder "fileidx".
+    """
+
+    loader = DirectoryLoader(filerawfolder, glob="**/*.txt")
+    documents = loader.load()
+    text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    # text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+
+    # use tiktoken
+    # text_splitter = CharacterTextSplitter.from_tiktoken_encoder(chunk_size=500, chunk_overlap=0)
+    docs = text_splitter.split_documents(documents)
+    # print("docs",docs)
+    # get faiss client
+    store = FAISS.load_local(fileidxfolder, OpenAIEmbeddings())
+
+    # get qdrant client
+    # qdrant_client = QdrantClient(host=qdrant_host, prefer_grpc=True)
+    # collection_name = "filedocs"
+    # # get qdrant docsearch
+    # store = Qdrant(qdrant_client, collection_name=collection_name, embedding_function=OpenAIEmbeddings().embed_query)
 
     # Create vector store from documents and save to disk
-    store = FAISS.from_texts(docs, OpenAIEmbeddings())
-    index_filename = f"{fileidxfolder}/docs.index"
-    faiss.write_index(store.index, index_filename)
-    store.index = None
-    with open(f"{fileidxfolder}/faiss_store.pkl", "wb") as f:
-        pickle.dump(store, f)
+    store.add_documents(docs)
+    store.save_local(fileidxfolder)
 
 
-def split_text(text, chunk_chars=4000, overlap=50):
+# list all indexes using qdrant
+def list_indexes():
     """
-    Pre-process text file into chunks
+    Lists all indexes in the LangChain index.
     """
-    splits = []
-    for i in range(0, len(text), chunk_chars - overlap):
-        splits.append(text[i : i + chunk_chars])
-    return splits
+
+    # get qdrant client
+    qdrant_client = QdrantClient(host=qdrant_host)
+    # get collection names
+    collection_names = qdrant_client.list_aliases()
+    return collection_names
 
 
-def gpt_answer(question):
-    # Load the LangChain.
-    index = faiss.read_index(f"{fileidxfolder}/docs.index")
+def gpt_answer(question, chaintype="stuff"):
+    # get faiss client
+    store = FAISS.load_local(fileidxfolder, OpenAIEmbeddings())
 
-    with open(f"{fileidxfolder}/faiss_store.pkl", "rb") as f:
-        store = pickle.load(f)
+    # get qdrant client
+    # qdrant_client = QdrantClient(host=qdrant_host, prefer_grpc=True)
 
-    store.index = index
+    # collection_name = "filedocs"
+    # # get qdrant docsearch
+    # store = Qdrant(qdrant_client, collection_name=collection_name, embedding_function=OpenAIEmbeddings().embed_query)
 
     prefix_messages = [
         {
             "role": "system",
-            "content": "You are a helpful assistant that is very good at problem solving who thinks step by step.",
+            # "content": "You are a helpful assistant that is very good at problem solving who thinks step by step.",
+            "content": "你是一位十分善于解决问题、按步骤思考的专业顾问。",
         }
     ]
     llm = OpenAIChat(temperature=0, prefix_messages=prefix_messages)
 
-    chain = VectorDBQA.from_chain_type(llm, chain_type="stuff", vectorstore=store)
+    chain = VectorDBQA.from_chain_type(llm, chain_type=chaintype, vectorstore=store)
 
     result = chain.run(question)
+
+    return result
+
+
+def gpt_vectoranswer(question):
+    # get faiss client
+    store = FAISS.load_local(fileidxfolder, OpenAIEmbeddings())
+
+    # get qdrant client
+    # qdrant_client = QdrantClient(host=qdrant_host, prefer_grpc=True)
+    # collection_name = "filedocs"
+    # # get qdrant docsearch
+    # store = Qdrant(qdrant_client, collection_name=collection_name, embedding_function=OpenAIEmbeddings().embed_query)
+
+    result = store.similarity_search_with_score(question)
 
     return result

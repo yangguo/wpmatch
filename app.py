@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from gptfuc import build_index, gpt_answer
+from gptfuc import add_to_index, build_index, gpt_answer, gpt_vectoranswer, list_indexes
 from upload import (
     copy_files,
     get_uploadfiles,
@@ -151,6 +151,9 @@ def main():
             st.session_state["wp_choice"] = ""
         if "file_list" not in st.session_state:
             st.session_state["file_list"] = []
+
+        if "docsearch" not in st.session_state:
+            st.session_state["docsearch"] = None
         # choose radio for file1 or file2
         file_choice = st.sidebar.radio("选择文件", ["选择文件", "选择底稿"])
 
@@ -162,7 +165,7 @@ def main():
 
             if upload_choice == []:
                 st.error("请选择文件")
-                return
+                # return
             wp_choice = upload_choice
 
         elif file_choice == "选择文件":
@@ -174,7 +177,7 @@ def main():
 
             if upload_choice == []:
                 st.error("请选择文件")
-                return
+                # return
 
             file_list = upload_choice
 
@@ -202,16 +205,31 @@ def main():
             st.session_state["wp_choice"] = wp_choice
 
         # enbedding button
-        embedding = st.sidebar.button("生成问答模型")
+        embedding = st.sidebar.button("重新生成模型")
         if embedding:
             # with st.spinner("正在生成问答模型..."):
             # generate embeddings
             try:
-                build_index()
+                docsearch = build_index()
+                st.session_state["docsearch"] = docsearch
                 st.success("问答模型生成完成")
             except Exception as e:
+                st.session_state["docsearch"] = None
                 st.error(e)
                 st.error("问答模型生成失败，请检查文件格式")
+
+        # add documnet button
+        add_doc = st.sidebar.button("模型添加文档")
+        if add_doc:
+            # with st.spinner("正在添加文档..."):
+            # generate embeddings
+            try:
+                add_to_index()
+                docsearch = st.session_state["docsearch"]
+                st.success("文档添加完成")
+            except Exception as e:
+                st.error(e)
+                st.error("文档添加失败，请检查文件格式")
 
         st.subheader("已选择的文件：")
         # display file1 rulechoice
@@ -241,6 +259,13 @@ def main():
         if remove:
             remove_uploadfiles(filerawfolder)
             st.success("删除成功")
+
+        # display all index files
+        # st.write("已编码的文件：")
+        # indexfilels = list_indexes()
+        # # display all upload files
+        # st.write(indexfilels)
+
     elif choice == "文件问答":
         st.subheader("文件问答")
 
@@ -249,13 +274,19 @@ def main():
         if mode == "单条":
             # question input
             question = st.text_input("输入问题")
-            if question != "":
+            # choose chain type
+            chain_type = st.selectbox(
+                "选择链条类型", ["stuff", "map_reduce", "refine", "map_rerank"]
+            )
+            if question != "" and chain_type != "":
                 # answer button
                 answer_btn = st.button("获取答案")
                 if answer_btn:
                     with st.spinner("正在获取答案..."):
                         # get answer
-                        answer = gpt_answer(question)
+                        # answer = gpt_answer(question,chain_type)
+                        # docsearch = st.session_state["docsearch"]
+                        answer = gpt_vectoranswer(question)
                         st.write(answer)
         elif mode == "批量":
             wp_choice = st.session_state["wp_choice"]
@@ -288,7 +319,9 @@ def main():
                             full_question = prompt_text + question
                             st.write("问题" + str(idx) + "： " + full_question)
                             # get answer
+                            docsearch = st.session_state["docsearch"]
                             answer = gpt_answer(full_question)
+                            # answer = gpt_vectoranswer(full_question, docsearch)
                             st.write(answer)
             else:
                 st.sidebar.error("请选择底稿")

@@ -83,3 +83,5 @@ Wand==0.6.11
 watchdog==2.2.1
 yarl==1.8.2
 zipp==3.13.0
+unstructured
+pinecone-client
