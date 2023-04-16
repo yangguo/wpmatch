@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from gptfuc import add_to_index, build_index, gpt_answer, gpt_vectoranswer, list_indexes
+from gptfuc import add_to_index, build_index, gpt_auditanswer, gpt_vectoranswer
 from upload import (
     copy_files,
     get_uploadfiles,
@@ -267,32 +267,69 @@ def main():
         # st.write(indexfilels)
 
     elif choice == "文件问答":
-        st.subheader("文件问答")
-
-        mode = st.sidebar.radio("选择模式", ["单条", "批量"])
-
+        mode = st.sidebar.selectbox("选择模式", ["单条", "批量"])
+        # choose chain type
+        # chain_type = st.sidebar.selectbox(
+        #     "选择链条类型", ["stuff", "map_reduce", "refine", "map_rerank"]
+        # )
+        chain_type = "stuff"
+        # choose model
+        model_name = st.sidebar.selectbox("选择模型", ["gpt-3.5-turbo", "gpt-4"])
+        # choose top_k
+        top_k = st.sidebar.slider("选择top_k", 1, 10, 3)
         if mode == "单条":
-            # question input
-            question = st.text_input("输入问题")
-            # choose chain type
-            chain_type = st.selectbox(
-                "选择链条类型", ["stuff", "map_reduce", "refine", "map_rerank"]
-            )
-            if question != "" and chain_type != "":
+            st.subheader("单条问答")
+            # choose the task option
+            task = st.sidebar.radio("选择任务", ["问答", "审计"])
+            if task == "问答":
+                # question input
+                question = st.text_area("输入问题")
+
                 # answer button
                 answer_btn = st.button("获取答案")
                 if answer_btn:
-                    with st.spinner("正在获取答案..."):
-                        # get answer
-                        # answer = gpt_answer(question,chain_type)
-                        # docsearch = st.session_state["docsearch"]
-                        answer = gpt_vectoranswer(question)
-                        st.write(answer)
+                    if question != "" and chain_type != "":
+                        with st.spinner("正在获取答案..."):
+                            # get answer
+                            # answer = gpt_answer(question,chain_type)
+                            # docsearch = st.session_state["docsearch"]
+                            answer, sourcedb = gpt_vectoranswer(
+                                question, chain_type, top_k=top_k, model_name=model_name
+                            )
+                            st.markdown("#### 答案")
+                            st.write(answer)
+                            with st.expander("查看来源"):
+                                st.markdown("#### 来源")
+                                st.table(sourcedb)
+                    else:
+                        st.error("问题或链条类型不能为空")
+            elif task == "审计":
+                # question input
+                question = st.text_area("审计要求")
+
+                # answer button
+                answer_btn = st.button("获取答案")
+                if answer_btn:
+                    if question != "" and chain_type != "":
+                        with st.spinner("正在获取答案..."):
+                            # get answer
+                            # answer = gpt_answer(question,chain_type)
+                            # docsearch = st.session_state["docsearch"]
+                            answer, sourcedb = gpt_auditanswer(
+                                question, chain_type, top_k=top_k, model_name=model_name
+                            )
+                            st.markdown("#### 结果")
+                            st.write(answer)
+                            with st.expander("查看来源"):
+                                st.markdown("#### 来源")
+                                st.table(sourcedb)
+                    else:
+                        st.error("问题或链条类型不能为空")
+
         elif mode == "批量":
+            st.subheader("批量问答")
             wp_choice = st.session_state["wp_choice"]
 
-            # input prompt text
-            prompt_text = st.sidebar.text_area("输入提示文本")
             # st.subheader("已选择的底稿：")
             # display file2 rulechoice
             if wp_choice != "":
@@ -310,19 +347,41 @@ def main():
                 end_num = int(end_num)
                 subwpdf = wpdf[start_num : end_num + 1]
                 questionls = subwpdf["条款"].tolist()
-                st.write(questionls)
+                # st.write(questionls)
+                # display question
+                st.write("问题列表：")
+                for idx, question in enumerate(questionls):
+                    st.write(str(idx) + "： " + question)
+
+                # resultls to save the result
+                resultls = []
                 # answer button
                 answer_btn = st.button("获取答案")
                 if answer_btn:
                     with st.spinner("正在获取答案..."):
                         for idx, question in enumerate(questionls):
-                            full_question = prompt_text + question
-                            st.write("问题" + str(idx) + "： " + full_question)
-                            # get answer
-                            docsearch = st.session_state["docsearch"]
-                            answer = gpt_answer(full_question)
-                            # answer = gpt_vectoranswer(full_question, docsearch)
+                            st.markdown("#### 问题" + str(idx) + "： " + question)
+                            answer, sourcedb = gpt_auditanswer(
+                                question, chain_type, top_k=top_k, model_name=model_name
+                            )
+                            st.markdown("#### 答案"+str(idx)+"：")
                             st.write(answer)
+                            with st.expander("查看来源"):
+                                st.markdown("#### 来源")
+                                st.table(sourcedb)
+                            resultls.append(answer)
+
+                        # save resultls to csv
+                        resultdf = pd.DataFrame(
+                            {"问题": questionls, "答案": resultls}
+                        )
+                        st.sidebar.download_button(
+                            label="下载结果",
+                            data=resultdf.to_csv(index=False),
+                            file_name="result.csv",
+                            mime="text/csv",
+                        )
+
             else:
                 st.sidebar.error("请选择底稿")
 
