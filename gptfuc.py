@@ -1,32 +1,47 @@
-# from langchain.llms import OpenAI
 import json
 import os
-import pickle
-from pathlib import Path
 
 import faiss
+import pandas as pd
 import pinecone
 
 # from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
-from langchain.chains import VectorDBQA
+from langchain.chains import RetrievalQA, VectorDBQA
 from langchain.chains.question_answering import load_qa_chain
+from langchain.chat_models import ChatOpenAI
 
 # from langchain.document_loaders import TextLoader
 from langchain.document_loaders import DirectoryLoader
-from langchain.embeddings import OpenAIEmbeddings
+from langchain.embeddings import (
+    HuggingFaceEmbeddings,
+    HuggingFaceHubEmbeddings,
+    OpenAIEmbeddings,
+)
 
 # from langchain.indexes import VectorstoreIndexCreator
 from langchain.llms import OpenAIChat
+from langchain.prompts.chat import (
+    AIMessagePromptTemplate,
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
+)
 from langchain.text_splitter import (
     CharacterTextSplitter,
     RecursiveCharacterTextSplitter,
 )
 from langchain.vectorstores import FAISS, Chroma, Pinecone, Qdrant
-from qdrant_client import QdrantClient
 
-# import requests
-# from llama_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
+# from qdrant_client import QdrantClient
+model_name = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+# embeddings =HuggingFaceEmbeddings(model_name=model_name)
+# embeddings = OpenAIEmbeddings()
 
+embeddings = HuggingFaceHubEmbeddings(
+    repo_id=model_name,
+    task="feature-extraction",
+    huggingfacehub_api_token="key",
+)
 
 # read config from config.json
 with open("config.json", "r") as f:
@@ -35,8 +50,12 @@ with open("config.json", "r") as f:
 # get openai api key from config.json
 api_key = config["openai_api_key"]
 
-# PINECONE_API_KEY = ''
-# PINECONE_API_ENV = 'us-west1-gcp'
+PINECONE_API_KEY = "key"
+PINECONE_API_ENV = "dev"
+
+# initialize pinecone
+pinecone.init(api_key=PINECONE_API_KEY, environment=PINECONE_API_ENV)
+
 
 qdrant_host = "127.0.0.1"
 # qdrant_api_key = ""
@@ -49,48 +68,17 @@ filerawfolder = "fileraw"
 fileidxfolder = "fileidx"
 backendurl = "http://localhost:8000"
 
-openai_api_key = os.environ.get("OPENAI_API_KEY")
-if openai_api_key is None:
-    print("请设置OPENAI_API_KEY")
-else:
-    print("已设置OPENAI_API_KEY" + openai_api_key)
+# openai_api_key = os.environ.get("OPENAI_API_KEY")
+# if openai_api_key is None:
+#     print("请设置OPENAI_API_KEY")
+# else:
+#     print("已设置OPENAI_API_KEY" + openai_api_key)
 
 # initialize pinecone
 # pinecone.init(
 #     api_key=PINECONE_API_KEY,
 #     environment=PINECONE_API_ENV
 # )
-
-# gpt_model="text-davinci-003"
-# gpt_model='gpt-3.5-turbo'
-
-
-# llm_predictor = LLMPredictor(
-#     llm=OpenAI(temperature=0, model_name=gpt_model, max_tokens=1024)
-# )
-
-# use ChatGPT [beta]
-# from gpt_index.langchain_helpers.chatgpt import ChatGPTLLMPredictor
-
-# llm_predictor = ChatGPTLLMPredictor()
-
-
-# def build_index():
-#     documents = SimpleDirectoryReader(filerawfolder, recursive=True).load_data()
-#     # index = GPTSimpleVectorIndex(documents)
-#     index = GPTSimpleVectorIndex(documents, llm_predictor=llm_predictor)
-#     index.save_to_disk(os.path.join(fileidxfolder, "filedata.json"))
-
-
-# def gpt_answer(question):
-#     filepath = os.path.join(fileidxfolder, "filedata.json")
-#     index = GPTSimpleVectorIndex.load_from_disk(filepath, llm_predictor=llm_predictor)
-
-#     # prompt = f'You are a helpful support agent. You are asked: "{question}". Try to use only the information provided. Format your answer nicely as a Markdown page.'
-#     prompt = f'您是一位专业顾问。您被问到："{question}"。请尽可能使用提供的信息。'
-#     # response = index.query(prompt).response.strip()
-#     response=index.query(prompt,llm_predictor=llm_predictor)
-#     return response
 
 
 def build_index():
@@ -121,7 +109,7 @@ def build_index():
     # use tiktoken
     # text_splitter = CharacterTextSplitter.from_tiktoken_encoder(chunk_size=1000, chunk_overlap=0)
     docs = text_splitter.split_documents(documents)
-    embeddings = OpenAIEmbeddings()
+    # embeddings = OpenAIEmbeddings()
     # Create vector store from documents and save to disk
     # store = FAISS.from_texts(docs, OpenAIEmbeddings())
     store = FAISS.from_documents(docs, embeddings)
@@ -137,16 +125,6 @@ def build_index():
     # index_name = "langchain1"
     # docsearch = Pinecone.from_documents(docs, embeddings, index_name=index_name)
     # return docsearch
-
-
-# def split_text(text, chunk_chars=4000, overlap=50):
-#     """
-#     Pre-process text file into chunks
-#     """
-#     splits = []
-#     for i in range(0, len(text), chunk_chars - overlap):
-#         splits.append(text[i : i + chunk_chars])
-#     return splits
 
 
 # create function to add new documents to the index
@@ -166,7 +144,7 @@ def add_to_index():
     docs = text_splitter.split_documents(documents)
     # print("docs",docs)
     # get faiss client
-    store = FAISS.load_local(fileidxfolder, OpenAIEmbeddings())
+    store = FAISS.load_local(fileidxfolder, embeddings)
 
     # get qdrant client
     # qdrant_client = QdrantClient(host=qdrant_host, prefer_grpc=True)
@@ -179,56 +157,111 @@ def add_to_index():
     store.save_local(fileidxfolder)
 
 
-# list all indexes using qdrant
-def list_indexes():
-    """
-    Lists all indexes in the LangChain index.
-    """
-
-    # get qdrant client
-    qdrant_client = QdrantClient(host=qdrant_host)
-    # get collection names
-    collection_names = qdrant_client.list_aliases()
-    return collection_names
-
-
-def gpt_answer(question, chaintype="stuff"):
+def gpt_vectoranswer(question, chaintype="stuff", top_k=4, model_name="gpt-3.5-turbo"):
     # get faiss client
-    store = FAISS.load_local(fileidxfolder, OpenAIEmbeddings())
+    store = FAISS.load_local(fileidxfolder, embeddings)
 
-    # get qdrant client
-    # qdrant_client = QdrantClient(host=qdrant_host, prefer_grpc=True)
+    # pinecone_namespace = "bank"
+    # pinecone_index_name = "ruledb"
 
-    # collection_name = "filedocs"
-    # # get qdrant docsearch
-    # store = Qdrant(qdrant_client, collection_name=collection_name, embedding_function=OpenAIEmbeddings().embed_query)
+    # # Create an index object
+    # index = pinecone.Index(index_name=pinecone_index_name)
 
-    prefix_messages = [
-        {
-            "role": "system",
-            # "content": "You are a helpful assistant that is very good at problem solving who thinks step by step.",
-            "content": "你是一位十分善于解决问题、按步骤思考的专业顾问。",
-        }
+    # index_stats_response = index.describe_index_stats()
+    # print(index_stats_response)
+
+    # collection_description = pinecone.describe_index('ruledb')
+    # print(collection_description)
+
+    system_template = """根据提供的背景信息，请准确和全面地回答用户的问题。
+    如果您不确定或不知道答案，请直接说明您不知道，避免编造任何信息。
+    {context}"""
+
+    messages = [
+        SystemMessagePromptTemplate.from_template(system_template),
+        HumanMessagePromptTemplate.from_template("{question}"),
     ]
-    llm = OpenAIChat(temperature=0, prefix_messages=prefix_messages)
+    prompt = ChatPromptTemplate.from_messages(messages)
 
-    chain = VectorDBQA.from_chain_type(llm, chain_type=chaintype, vectorstore=store)
+    chain_type_kwargs = {"prompt": prompt}
+    llm = ChatOpenAI(model_name=model_name)
+    # chain = VectorDBQA.from_chain_type(
+    receiver = store.as_retriever()
+    receiver.search_kwargs["k"] = top_k
+    chain = RetrievalQA.from_chain_type(
+        llm,
+        chain_type=chaintype,
+        # vectorstore=store,
+        retriever=receiver,
+        # k=top_k,
+        return_source_documents=True,
+        chain_type_kwargs=chain_type_kwargs,
+    )
+    result = chain({"query": question})
 
-    result = chain.run(question)
+    answer = result["result"]
+    # sourcedf=None
+    source = result["source_documents"]
+    sourcedf = docs_to_df_audit(source)
 
-    return result
+    return answer, sourcedf
 
 
-def gpt_vectoranswer(question):
+def gpt_auditanswer(question, chaintype="stuff", top_k=4, model_name="gpt-3.5-turbo"):
     # get faiss client
-    store = FAISS.load_local(fileidxfolder, OpenAIEmbeddings())
+    store = FAISS.load_local(fileidxfolder, embeddings)
 
-    # get qdrant client
-    # qdrant_client = QdrantClient(host=qdrant_host, prefer_grpc=True)
-    # collection_name = "filedocs"
-    # # get qdrant docsearch
-    # store = Qdrant(qdrant_client, collection_name=collection_name, embedding_function=OpenAIEmbeddings().embed_query)
+    system_template = "您是一位资深的 IT 咨询顾问，专业解决问题并能有条理地分析问题。"
 
-    result = store.similarity_search_with_score(question)
+    human_template = """
+请根据以下政策文件，检查它们整体上是否符合 {question} 的要求。请在回答中描述您的审核过程、依据和推理。
+请指出不符合规定的地方，给出改进意见和具体建议。
+待审核的监管要求包括：{context}
 
-    return result
+如果您无法确定答案，请直接回答“不确定”或“不符合”，切勿编造答案。
+"""
+
+    messages = [
+        SystemMessagePromptTemplate.from_template(system_template),
+        HumanMessagePromptTemplate.from_template(human_template),
+    ]
+    prompt = ChatPromptTemplate.from_messages(messages)
+
+    chain_type_kwargs = {"prompt": prompt}
+    llm = ChatOpenAI(model_name=model_name)
+    # chain = VectorDBQA.from_chain_type(
+    receiver = store.as_retriever()
+    receiver.search_kwargs["k"] = top_k
+    chain = RetrievalQA.from_chain_type(
+        llm,
+        chain_type=chaintype,
+        # vectorstore=store,
+        retriever=receiver,
+        # k=top_k,
+        return_source_documents=True,
+        chain_type_kwargs=chain_type_kwargs,
+    )
+    result = chain({"query": question})
+
+    answer = result["result"]
+    # sourcedf=None
+    source = result["source_documents"]
+    sourcedf = docs_to_df_audit(source)
+
+    return answer, sourcedf
+
+
+# convert document list to pandas dataframe
+def docs_to_df_audit(docs):
+    """
+    Converts a list of documents to a pandas dataframe.
+    """
+    data = []
+    for document in docs:
+        page_content = document.page_content
+        metadata = document.metadata
+        plc = metadata["source"]
+        row = {"内容": page_content, "来源": plc}
+        data.append(row)
+    df = pd.DataFrame(data)
+    return df
