@@ -1,14 +1,14 @@
 import json
 import os
 
-import faiss
+# import faiss
 import pandas as pd
 import pinecone
 
 # from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
 from langchain.chains import RetrievalQA, VectorDBQA
 from langchain.chains.question_answering import load_qa_chain
-from langchain.chat_models import ChatOpenAI
+from langchain.chat_models import ChatOpenAI,AzureChatOpenAI
 
 # from langchain.document_loaders import TextLoader
 from langchain.document_loaders import DirectoryLoader
@@ -32,6 +32,17 @@ from langchain.text_splitter import (
 )
 from langchain.vectorstores import FAISS, Chroma, Pinecone, Qdrant
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+AZURE_BASE_URL = os.environ.get("AZURE_BASE_URL")
+AZURE_API_KEY = os.environ.get("AZURE_API_KEY")
+AZURE_DEPLOYMENT_NAME = os.environ.get("AZURE_DEPLOYMENT_NAME")
+
+COHERE_API_KEY=os.environ.get("COHERE_API_KEY")
+HF_API_TOKEN=os.environ.get("HF_API_TOKEN")
+
 # from qdrant_client import QdrantClient
 model_name = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 # embeddings =HuggingFaceEmbeddings(model_name=model_name)
@@ -40,45 +51,23 @@ model_name = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 embeddings = HuggingFaceHubEmbeddings(
     repo_id=model_name,
     task="feature-extraction",
-    huggingfacehub_api_token="***REMOVED***",
+    huggingfacehub_api_token=HF_API_TOKEN,
 )
 
-# read config from config.json
-with open("config.json", "r") as f:
-    config = json.load(f)
 
-# get openai api key from config.json
-api_key = config["openai_api_key"]
-
-PINECONE_API_KEY = "***REMOVED***"
-PINECONE_API_ENV = "us-west1-gcp"
-
-# initialize pinecone
-pinecone.init(api_key=PINECONE_API_KEY, environment=PINECONE_API_ENV)
-
-
-qdrant_host = "127.0.0.1"
-# qdrant_api_key = ""
-
-
-os.environ["OPENAI_API_KEY"] = api_key
+# use azure model
+llm = AzureChatOpenAI(
+    openai_api_base=AZURE_BASE_URL,
+    openai_api_version="2023-07-01-preview",
+    deployment_name=AZURE_DEPLOYMENT_NAME,
+    openai_api_key=AZURE_API_KEY,
+    openai_api_type = "azure",
+)
 
 uploadfolder = "uploads"
 filerawfolder = "fileraw"
 fileidxfolder = "fileidx"
 backendurl = "http://localhost:8000"
-
-# openai_api_key = os.environ.get("OPENAI_API_KEY")
-# if openai_api_key is None:
-#     print("请设置OPENAI_API_KEY")
-# else:
-#     print("已设置OPENAI_API_KEY" + openai_api_key)
-
-# initialize pinecone
-# pinecone.init(
-#     api_key=PINECONE_API_KEY,
-#     environment=PINECONE_API_ENV
-# )
 
 
 def build_index():
@@ -103,7 +92,7 @@ def build_index():
     #     splits = split_text(d, chunk_chars=800, overlap=50)
     #     docs.extend(splits)
 
-    loader = DirectoryLoader(filerawfolder, glob="**/*.txt")
+    loader = DirectoryLoader(filerawfolder, glob="**/*.*")
     documents = loader.load()
     text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     # use tiktoken
@@ -134,7 +123,7 @@ def add_to_index():
     The created index is saved to a file in the folder "fileidx".
     """
 
-    loader = DirectoryLoader(filerawfolder, glob="**/*.txt")
+    loader = DirectoryLoader(filerawfolder, glob="**/*.*")
     documents = loader.load()
     text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     # text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
@@ -184,7 +173,6 @@ def gpt_vectoranswer(question, chaintype="stuff", top_k=4, model_name="gpt-3.5-t
     prompt = ChatPromptTemplate.from_messages(messages)
 
     chain_type_kwargs = {"prompt": prompt}
-    llm = ChatOpenAI(model_name=model_name)
     # chain = VectorDBQA.from_chain_type(
     receiver = store.as_retriever()
     receiver.search_kwargs["k"] = top_k
@@ -228,7 +216,7 @@ def gpt_auditanswer(question, chaintype="stuff", top_k=4, model_name="gpt-3.5-tu
     prompt = ChatPromptTemplate.from_messages(messages)
 
     chain_type_kwargs = {"prompt": prompt}
-    llm = ChatOpenAI(model_name=model_name)
+
     # chain = VectorDBQA.from_chain_type(
     receiver = store.as_retriever()
     receiver.search_kwargs["k"] = top_k
