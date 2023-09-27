@@ -1,14 +1,17 @@
-import json
+# import json
 import os
 
 # import faiss
 import pandas as pd
-import pinecone
+
+# import pinecone
+from dotenv import load_dotenv
 
 # from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
-from langchain.chains import RetrievalQA, VectorDBQA
-from langchain.chains.question_answering import load_qa_chain
-from langchain.chat_models import ChatOpenAI,AzureChatOpenAI
+from langchain.chains import RetrievalQA
+
+# from langchain.chains.question_answering import load_qa_chain
+from langchain.chat_models import AzureChatOpenAI, ChatOpenAI
 
 # from langchain.document_loaders import TextLoader
 from langchain.document_loaders import DirectoryLoader
@@ -32,16 +35,14 @@ from langchain.text_splitter import (
 )
 from langchain.vectorstores import FAISS, Chroma, Pinecone, Qdrant
 
-from dotenv import load_dotenv
-
 load_dotenv()
 
 AZURE_BASE_URL = os.environ.get("AZURE_BASE_URL")
 AZURE_API_KEY = os.environ.get("AZURE_API_KEY")
 AZURE_DEPLOYMENT_NAME = os.environ.get("AZURE_DEPLOYMENT_NAME")
 
-COHERE_API_KEY=os.environ.get("COHERE_API_KEY")
-HF_API_TOKEN=os.environ.get("HF_API_TOKEN")
+COHERE_API_KEY = os.environ.get("COHERE_API_KEY")
+HF_API_TOKEN = os.environ.get("HF_API_TOKEN")
 
 # from qdrant_client import QdrantClient
 model_name = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
@@ -61,7 +62,7 @@ llm = AzureChatOpenAI(
     openai_api_version="2023-07-01-preview",
     deployment_name=AZURE_DEPLOYMENT_NAME,
     openai_api_key=AZURE_API_KEY,
-    openai_api_type = "azure",
+    openai_api_type="azure",
 )
 
 uploadfolder = "uploads"
@@ -195,9 +196,12 @@ def gpt_vectoranswer(question, chaintype="stuff", top_k=4, model_name="gpt-3.5-t
     return answer, sourcedf
 
 
-def gpt_auditanswer(question, chaintype="stuff", top_k=4, model_name="gpt-3.5-turbo"):
+def gpt_auditanswer(
+    question, upload_choice, chaintype="stuff", top_k=4, model_name="gpt-35-turbo"
+):
     # get faiss client
     store = FAISS.load_local(fileidxfolder, embeddings)
+    filter = upload_to_dict(upload_choice)
 
     system_template = "您是一位资深的 IT 咨询顾问，专业解决问题并能有条理地分析问题。"
 
@@ -218,13 +222,13 @@ def gpt_auditanswer(question, chaintype="stuff", top_k=4, model_name="gpt-3.5-tu
     chain_type_kwargs = {"prompt": prompt}
 
     # chain = VectorDBQA.from_chain_type(
-    receiver = store.as_retriever()
-    receiver.search_kwargs["k"] = top_k
+    retriever = store.as_retriever(search_kwargs={"k": top_k, "filter": filter})
+    # receiver.search_kwargs["k"] = top_k
     chain = RetrievalQA.from_chain_type(
         llm,
         chain_type=chaintype,
         # vectorstore=store,
-        retriever=receiver,
+        retriever=retriever,
         # k=top_k,
         return_source_documents=True,
         chain_type_kwargs=chain_type_kwargs,
@@ -253,3 +257,10 @@ def docs_to_df_audit(docs):
         data.append(row)
     df = pd.DataFrame(data)
     return df
+
+
+def upload_to_dict(lst):
+    if len(lst) == 1:
+        return {"source": filerawfolder + "/" + lst[0]}
+    else:
+        return {}
