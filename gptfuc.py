@@ -1,45 +1,39 @@
 # import json
 import os
+from operator import itemgetter
 
 # import faiss
 import pandas as pd
 
 # import pinecone
 from dotenv import load_dotenv
-
-# from gpt_index import GPTSimpleVectorIndex, LLMPredictor, SimpleDirectoryReader
-from langchain.chains import RetrievalQA
-
-# from langchain.chains.question_answering import load_qa_chain
-from langchain.chat_models import AzureChatOpenAI, ChatOpenAI
+from langchain import hub
 
 # from langchain.document_loaders import TextLoader
 from langchain.document_loaders import DirectoryLoader
-from langchain.embeddings import (
-    HuggingFaceEmbeddings,
-    HuggingFaceHubEmbeddings,
-    OpenAIEmbeddings,
-)
-
-# from langchain.indexes import VectorstoreIndexCreator
-from langchain.llms import OpenAIChat
-from langchain.prompts.chat import (
-    AIMessagePromptTemplate,
-    ChatPromptTemplate,
-    HumanMessagePromptTemplate,
-    SystemMessagePromptTemplate,
-)
+from langchain.schema import StrOutputParser
 from langchain.text_splitter import (
     CharacterTextSplitter,
     RecursiveCharacterTextSplitter,
 )
-from langchain.vectorstores import FAISS, Chroma, Pinecone, Qdrant
+from langchain_community.chat_models import QianfanChatEndpoint
+from langchain_community.chat_models.tongyi import ChatTongyi
+from langchain_community.embeddings import HuggingFaceHubEmbeddings
+from langchain_community.vectorstores import FAISS, SupabaseVectorStore
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 
 load_dotenv()
 
 AZURE_BASE_URL = os.environ.get("AZURE_BASE_URL")
 AZURE_API_KEY = os.environ.get("AZURE_API_KEY")
 AZURE_DEPLOYMENT_NAME = os.environ.get("AZURE_DEPLOYMENT_NAME")
+AZURE_DEPLOYMENT_NAME_16K = os.environ.get("AZURE_DEPLOYMENT_NAME_16K")
+AZURE_DEPLOYMENT_NAME_GPT4 = os.environ.get("AZURE_DEPLOYMENT_NAME_GPT4")
+AZURE_DEPLOYMENT_NAME_GPT4_32K = os.environ.get("AZURE_DEPLOYMENT_NAME_GPT4_32K")
+AZURE_DEPLOYMENT_NAME_GPT4_TURBO = os.environ.get("AZURE_DEPLOYMENT_NAME_GPT4_TURBO")
+AZURE_DEPLOYMENT_NAME_EMBEDDING = os.environ.get("AZURE_DEPLOYMENT_NAME_EMBEDDING")
 
 COHERE_API_KEY = os.environ.get("COHERE_API_KEY")
 HF_API_TOKEN = os.environ.get("HF_API_TOKEN")
@@ -56,19 +50,56 @@ embeddings = HuggingFaceHubEmbeddings(
 )
 
 
-# use azure model
-llm = AzureChatOpenAI(
-    openai_api_base=AZURE_BASE_URL,
-    openai_api_version="2023-07-01-preview",
-    deployment_name=AZURE_DEPLOYMENT_NAME,
-    openai_api_key=AZURE_API_KEY,
-    openai_api_type="azure",
-)
+# convert gpt model name to azure deployment name
+gpt_to_deployment = {
+    "gpt-35-turbo": AZURE_DEPLOYMENT_NAME,
+    "gpt-35-turbo-16k": AZURE_DEPLOYMENT_NAME_16K,
+    "gpt-4": AZURE_DEPLOYMENT_NAME_GPT4,
+    "gpt-4-32k": AZURE_DEPLOYMENT_NAME_GPT4_32K,
+    "gpt-4-turbo": AZURE_DEPLOYMENT_NAME_GPT4_TURBO,
+}
+
+
+# choose chatllm base on model name
+def get_chatllm(model_name):
+    if model_name == "tongyi":
+        llm = ChatTongyi(
+            streaming=True,
+        )
+    elif (
+        model_name == "ERNIE-Bot-4"
+        or model_name == "ERNIE-Bot-turbo"
+        or model_name == "ChatGLM2-6B-32K"
+        or model_name == "Yi-34B-Chat"
+    ):
+        llm = QianfanChatEndpoint(
+            model=model_name,
+        )
+    elif model_name == "gemini-pro":
+        llm = ChatGoogleGenerativeAI(
+            model=model_name, convert_system_message_to_human=True
+        )
+    else:
+        llm = get_azurellm(model_name)
+    return llm
+
+
+# use azure llm based on model name
+def get_azurellm(model_name):
+    deployment_name = gpt_to_deployment[model_name]
+    llm = AzureChatOpenAI(
+        azure_endpoint=AZURE_BASE_URL,
+        openai_api_version="2023-12-01-preview",
+        azure_deployment=deployment_name,
+        openai_api_key=AZURE_API_KEY,
+    )
+    return llm
+
 
 uploadfolder = "uploads"
 filerawfolder = "fileraw"
 fileidxfolder = "fileidx"
-backendurl = "http://localhost:8000"
+# backendurl = "http://localhost:8000"
 
 
 def build_index():
@@ -163,34 +194,63 @@ def gpt_vectoranswer(question, chaintype="stuff", top_k=4, model_name="gpt-3.5-t
     # collection_description = pinecone.describe_index('ruledb')
     # print(collection_description)
 
-    system_template = """根据提供的背景信息，请准确和全面地回答用户的问题。
-    如果您不确定或不知道答案，请直接说明您不知道，避免编造任何信息。
-    {context}"""
+    # system_template = """根据提供的背景信息，请准确和全面地回答用户的问题。
+    # 如果您不确定或不知道答案，请直接说明您不知道，避免编造任何信息。
+    # {context}"""
 
-    messages = [
-        SystemMessagePromptTemplate.from_template(system_template),
-        HumanMessagePromptTemplate.from_template("{question}"),
-    ]
-    prompt = ChatPromptTemplate.from_messages(messages)
+    # messages = [
+    #     SystemMessagePromptTemplate.from_template(system_template),
+    #     HumanMessagePromptTemplate.from_template("{question}"),
+    # ]
+    # prompt = ChatPromptTemplate.from_messages(messages)
 
-    chain_type_kwargs = {"prompt": prompt}
+    # chain_type_kwargs = {"prompt": prompt}
+    prompt = hub.pull("vyang/gpt_answer")
+
+    llm = get_chatllm(model_name)
+
     # chain = VectorDBQA.from_chain_type(
-    receiver = store.as_retriever()
-    receiver.search_kwargs["k"] = top_k
-    chain = RetrievalQA.from_chain_type(
-        llm,
-        chain_type=chaintype,
-        # vectorstore=store,
-        retriever=receiver,
-        # k=top_k,
-        return_source_documents=True,
-        chain_type_kwargs=chain_type_kwargs,
-    )
-    result = chain({"query": question})
+    retriever = store.as_retriever()
+    retriever.search_kwargs["k"] = top_k
 
-    answer = result["result"]
+    # chain = RetrievalQA.from_chain_type(
+    #     llm,
+    #     chain_type=chaintype,
+    #     # vectorstore=store,
+    #     retriever=receiver,
+    #     # k=top_k,
+    #     return_source_documents=True,
+    #     chain_type_kwargs=chain_type_kwargs,
+    # )
+    # result = chain({"query": question})
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+
+    output_parser = StrOutputParser()
+
+    rag_chain_from_docs = (
+        {
+            "context": lambda input: format_docs(input["documents"]),
+            "question": itemgetter("question"),
+        }
+        | prompt
+        | llm
+        | output_parser
+    )
+
+    rag_chain_with_source = RunnableParallel(
+        {"documents": retriever, "question": RunnablePassthrough()}
+    ) | {
+        # "contents": lambda input: [doc.page_content for doc in input["documents"]],
+        "documents": lambda input: [doc for doc in input["documents"]],
+        "answer": rag_chain_from_docs,
+    }
+
+    result = rag_chain_with_source.invoke(question)
+
+    answer = result["answer"]
     # sourcedf=None
-    source = result["source_documents"]
+    source = result["documents"]
     sourcedf = docs_to_df_audit(source)
 
     return answer, sourcedf
@@ -203,41 +263,69 @@ def gpt_auditanswer(
     store = FAISS.load_local(fileidxfolder, embeddings)
     filter = upload_to_dict(upload_choice)
 
-    system_template = "您是一位资深的 IT 咨询顾问，专业解决问题并能有条理地分析问题。"
+    #     system_template = "您是一位资深的 IT 咨询顾问，专业解决问题并能有条理地分析问题。"
 
-    human_template = """
-请根据以下政策文件，检查它们整体上是否符合 {question} 的要求。请在回答中描述您的审核过程、依据和推理。
-请指出不符合规定的地方，给出改进意见和具体建议。
-待审核的监管要求包括：{context}
+    #     human_template = """
+    # 请根据以下政策文件，检查它们整体上是否符合 {question} 的要求。请在回答中描述您的审核过程、依据和推理。
+    # 请指出不符合规定的地方，给出改进意见和具体建议。
+    # 待审核的监管要求包括：{context}
 
-如果您无法确定答案，请直接回答“不确定”或“不符合”，切勿编造答案。
-"""
+    # 如果您无法确定答案，请直接回答“不确定”或“不符合”，切勿编造答案。
+    # """
 
-    messages = [
-        SystemMessagePromptTemplate.from_template(system_template),
-        HumanMessagePromptTemplate.from_template(human_template),
-    ]
-    prompt = ChatPromptTemplate.from_messages(messages)
+    #     messages = [
+    #         SystemMessagePromptTemplate.from_template(system_template),
+    #         HumanMessagePromptTemplate.from_template(human_template),
+    #     ]
+    #     prompt = ChatPromptTemplate.from_messages(messages)
 
-    chain_type_kwargs = {"prompt": prompt}
+    #     chain_type_kwargs = {"prompt": prompt}
+
+    chat_prompt = hub.pull("vyang/get_matchplc")
+    llm = get_chatllm(model_name)
 
     # chain = VectorDBQA.from_chain_type(
     retriever = store.as_retriever(search_kwargs={"k": top_k, "filter": filter})
     # receiver.search_kwargs["k"] = top_k
-    chain = RetrievalQA.from_chain_type(
-        llm,
-        chain_type=chaintype,
-        # vectorstore=store,
-        retriever=retriever,
-        # k=top_k,
-        return_source_documents=True,
-        chain_type_kwargs=chain_type_kwargs,
-    )
-    result = chain({"query": question})
+    # chain = RetrievalQA.from_chain_type(
+    #     llm,
+    #     chain_type=chaintype,
+    #     # vectorstore=store,
+    #     retriever=retriever,
+    #     # k=top_k,
+    #     return_source_documents=True,
+    #     chain_type_kwargs=chain_type_kwargs,
+    # )
+    # result = chain({"query": question})
 
-    answer = result["result"]
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+
+    output_parser = StrOutputParser()
+
+    rag_chain_from_docs = (
+        {
+            "context": lambda input: format_docs(input["documents"]),
+            "question": itemgetter("question"),
+        }
+        | chat_prompt
+        | llm
+        | output_parser
+    )
+
+    rag_chain_with_source = RunnableParallel(
+        {"documents": retriever, "question": RunnablePassthrough()}
+    ) | {
+        # "contents": lambda input: [doc.page_content for doc in input["documents"]],
+        "documents": lambda input: [doc for doc in input["documents"]],
+        "answer": rag_chain_from_docs,
+    }
+
+    result = rag_chain_with_source.invoke(question)
+
+    answer = result["answer"]
     # sourcedf=None
-    source = result["source_documents"]
+    source = result["documents"]
     sourcedf = docs_to_df_audit(source)
 
     return answer, sourcedf

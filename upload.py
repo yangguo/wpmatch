@@ -6,7 +6,8 @@ import docx
 
 # import numpy as np
 import pandas as pd
-import pdfplumber
+
+# import pdfplumber
 import streamlit as st
 
 # from utils import get_csvdf
@@ -49,28 +50,28 @@ def savedf(txtlist, filename):
 
 
 # convert pdf to dataframe usng pdfplumber
-def pdf2df_plumber(filename, filepath):
-    result = ""
-    with pdfplumber.open(filepath) as pdf:
-        for page in pdf.pages:
-            txt = page.extract_text()
-            if txt != "":
-                result += txt
-    dflist = result.replace("\x0c", "").replace("\n", "").split("。")
-    savedf(dflist, filename)
+# def pdf2df_plumber(filename, filepath):
+#     result = ""
+#     with pdfplumber.open(filepath) as pdf:
+#         for page in pdf.pages:
+#             txt = page.extract_text()
+#             if txt != "":
+#                 result += txt
+#     dflist = result.replace("\x0c", "").replace("\n", "").split("。")
+#     savedf(dflist, filename)
 
 
-def get_pdfdf():
-    fileslist = glob.glob(uploadfolder + "**/*.pdf", recursive=True)
-    # get csv file name list
-    csvfiles = get_csvfilelist()
+# def get_pdfdf():
+#     fileslist = glob.glob(uploadfolder + "**/*.pdf", recursive=True)
+#     # get csv file name list
+#     csvfiles = get_csvfilelist()
 
-    for filepath in fileslist:
-        # get file name
-        name = getfilename(filepath)
-        # if name not in csvfiles
-        if name not in csvfiles:
-            pdf2df_plumber(name, filepath)
+#     for filepath in fileslist:
+#         # get file name
+#         name = getfilename(filepath)
+#         # if name not in csvfiles
+#         if name not in csvfiles:
+#             pdf2df_plumber(name, filepath)
 
 
 def doc2df(filename, filepath):
