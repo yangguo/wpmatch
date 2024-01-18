@@ -165,7 +165,7 @@ def main():
             # get current wp_choice value from session
             # wp_choice = st.session_state["wp_choice"]
             upload_list = get_uploadfiles(uploadfolder)
-            upload_choice = st.sidebar.selectbox("选择已上传文件:")
+            upload_choice = st.sidebar.selectbox("选择已上传文件:", upload_list)
 
             if upload_choice == []:
                 st.error("请选择文件")
@@ -276,6 +276,12 @@ def main():
         for uploadfile in uploadfilels:
             st.markdown(f"- {uploadfile}")
 
+        # st.sidebar.subheader("删除所有文件")
+        remove = st.sidebar.button("删除已上传文件")
+        if remove:
+            remove_uploadfiles(uploadfolder)
+            st.success("删除成功")
+
     elif choice == "智能匹配":
         mode = st.sidebar.selectbox("选择模式", ["单一", "批量"])
 
@@ -286,7 +292,22 @@ def main():
         # )
         chain_type = "stuff"
         # choose model
-        model_name = st.sidebar.selectbox("选择模型", ["gpt-35-turbo", "gpt-4"])
+        model_name = st.sidebar.selectbox(
+            "选择模型",
+            [
+                "gpt-35-turbo",
+                "gpt-35-turbo-16k",
+                "gpt-4",
+                "gpt-4-32k",
+                "gpt-4-turbo",
+                "tongyi",
+                "ERNIE-Bot-4",
+                "ERNIE-Bot-turbo",
+                "ChatGLM2-6B-32K",
+                "Yi-34B-Chat",
+                "gemini-pro",
+            ],
+        )
         # choose top_k
         top_k = st.sidebar.slider("选择top_k", 1, 10, 3)
         if mode == "单一":
