@@ -82,7 +82,7 @@ validators==0.20.0
 Wand==0.6.11
 watchdog==2.2.1
 yarl==1.8.2
-zipp==3.13.0
+zipp==3.19.1
 unstructured==0.5.11
 pinecone-client==2.2.1
 faiss-cpu==1.7.3
